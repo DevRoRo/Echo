@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 # PORT 1: How we generate text (LLM)
 class TextGenerationPort(ABC):
     @abstractmethod
-    def generate_text(self, prompt: str) -> str:
+    def generate_text(self, prompt: str, word_count: int, conversation_context: str) -> str:
         """Must accept a prompt and return the AI-generated text response."""
         pass
 

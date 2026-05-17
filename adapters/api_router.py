@@ -9,12 +9,16 @@ router = APIRouter()
 
 # --- Schemas ---
 class TextToAudioRequest(BaseModel):
-    text: str
-    voice_name: str = "Kore"
+    prompt: str
+    voice_name: str
+    conversation_context: str
+
 
 class PromptToAudioRequest(BaseModel):
     prompt: str
-    voice_name: str = "Kore"
+    voice_name: str
+    word_count: int
+    conversation_context: str
 
 # --- Endpoints ---
 
@@ -26,7 +30,7 @@ async def generate_audio_endpoint(request: TextToAudioRequest):
     use_case = GenerateTestAudioUseCase(audio_generator=gemini_adapter, storage=local_storage)
 
     try:
-        saved_file_path = use_case.execute(text=request.text, voice_name=request.voice_name)
+        saved_file_path = use_case.execute(prompt=request.prompt, voice_name=request.voice_name, conversation_context=request.conversation_context)
         return {"status": "success", "file_path": saved_file_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -48,7 +52,7 @@ async def ask_professor_endpoint(request: PromptToAudioRequest):
 
     try:
         # 3. Execute workflow
-        result = use_case.execute(prompt=request.prompt, voice_name=request.voice_name)
+        result = use_case.execute(prompt=request.prompt, voice_name=request.voice_name, word_count=request.word_count, conversation_context=request.conversation_context)
         
         return {
             "status": "success",

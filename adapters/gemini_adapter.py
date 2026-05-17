@@ -7,10 +7,10 @@ class GeminiAdapter(AudioGenerationPort, TextGenerationPort):
     def __init__(self):
         self.client = genai.Client()
 
-    def generate_text(self, prompt: str) -> str:
+    def generate_text(self, prompt: str, word_count: str) -> str:
         response = self.client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=prompt,
+            contents=(prompt, word_count)
         )
         
         if not response.text:
@@ -35,9 +35,9 @@ class GeminiAdapter(AudioGenerationPort, TextGenerationPort):
         )
         
         audio_bytes = None
-        if response.candidates and response.candidates[0].content.parts:
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
             for part in response.candidates[0].content.parts:
-                if part.inline_data and part.inline_data.mime_type.startswith("audio/"):
+                if part.inline_data and part.inline_data.mime_type and part.inline_data.mime_type.startswith("audio/"):
                     audio_bytes = part.inline_data.data
                     break
                     
