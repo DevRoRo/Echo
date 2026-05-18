@@ -22,7 +22,7 @@ class GenerateConversationalAudioUseCase:
             raise ValueError("The prompt cannot be empty.")
             
         # 1. Think (Generate Text)
-        ai_response_text = self.text_generator.generate_text(prompt, word_count, conversation_context)
+        ai_response_text = self.text_generator.generate_text(prompt, word_count)
         
         # 2. Speak (Generate Audio)
         base64_audio = self.audio_generator.generate_base64(ai_response_text, voice_name)
@@ -38,11 +38,16 @@ class GenerateConversationalAudioUseCase:
 
 class GenerateTestAudioUseCase:
     # Dependency Injection: We pass the adapters into the core logic
-    def __init__(self, audio_generator: AudioGenerationPort, storage: AudioStoragePort):
+    def __init__(
+        self, 
+        audio_generator: AudioGenerationPort, 
+        storage: AudioStoragePort
+    ):
+        
         self.audio_generator = audio_generator
         self.storage = storage
 
-    def execute(self, prompt: str, voice_name: str, conversation_context: str) -> str:
+    def execute(self, prompt: str, voice_name: str) -> str:
         """
         The Business Logic:
         1. Request audio generation.
