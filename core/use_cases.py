@@ -47,7 +47,7 @@ class GenerateTestAudioUseCase:
         self.audio_generator = audio_generator
         self.storage = storage
 
-    def execute(self, prompt: str, voice_name: str) -> str:
+    def execute(self, prompt: str, voice_name: str, conversation_context: str) -> str:
         """
         The Business Logic:
         1. Request audio generation.
