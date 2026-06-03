@@ -1,25 +1,14 @@
 import base64
 from google import genai
 from google.genai import types
-from core.ports import AudioGenerationPort, TextGenerationPort
+from core.ports import AudioData, AudioGenerationPort
 
-class GeminiAdapter(AudioGenerationPort, TextGenerationPort):
+
+class GeminiTTSAdapter(AudioGenerationPort):
     def __init__(self):
         self.client = genai.Client()
 
-    def generate_text(self, prompt: str, word_count: str) -> str:
-        prompt_string = prompt + "MAX word count: " + str(word_count) + "TEXT MUST BE IN ENGLISH"
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt_string
-        )
-        
-        if not response.text:
-            raise RuntimeError("Gemini processed the prompt but returned no text.")
-            
-        return response.text   
-
-    def generate_base64(self, text: str, voice_name: str) -> str:
+    def generate_base64(self, text: str, voice_name: str) -> AudioData:
         response = self.client.models.generate_content(
             model="gemini-3.1-flash-tts-preview",
             contents=text,
@@ -28,21 +17,27 @@ class GeminiAdapter(AudioGenerationPort, TextGenerationPort):
                 speech_config=types.SpeechConfig(
                     voice_config=types.VoiceConfig(
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=voice_name
+                            voice_name=voice_name,
                         )
                     )
-                )
-            )
+                ),
+            ),
         )
-        
-        audio_bytes = None
+
+        audio_data = None
+        mime_type = "audio/wav"
+
         if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
             for part in response.candidates[0].content.parts:
                 if part.inline_data and part.inline_data.mime_type and part.inline_data.mime_type.startswith("audio/"):
-                    audio_bytes = part.inline_data.data
+                    mime_type = part.inline_data.mime_type
+                    audio_data = part.inline_data.data
                     break
-                    
-        if not audio_bytes:
+
+        if not audio_data:
             raise RuntimeError("Gemini processed the request but returned no audio.")
 
-        return base64.b64encode(audio_bytes).decode("utf-8")
+        return AudioData(
+            base64_string=base64.b64encode(audio_data).decode("utf-8"),
+            mime_type=mime_type,
+        )

@@ -1,22 +1,44 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
-# PORT 1: How we generate text (LLM)
+
+# --- Value Objects ---
+
+@dataclass
+class AudioData:
+    base64_string: str
+    mime_type: str
+
+
+# --- Outbound (Driven) Ports ---
+
 class TextGenerationPort(ABC):
     @abstractmethod
     def generate_text(self, prompt: str, word_count: int, conversation_context: str) -> str:
-        """Must accept a prompt and return the AI-generated text response."""
         pass
 
-# PORT 2: How we generate audio
+
 class AudioGenerationPort(ABC):
     @abstractmethod
-    def generate_base64(self, text: str, voice_name: str) -> str:
-        """Must return a base64 encoded audio string."""
+    def generate_base64(self, text: str, voice_name: str) -> AudioData:
         pass
 
-# PORT 3: How we store audio
+
 class AudioStoragePort(ABC):
     @abstractmethod
-    def save_base64(self, base64_string: str) -> str:
-        """Must save the string to a file/cloud and return the file path/URL."""
+    def save_base64(self, audio_data: AudioData) -> str:
+        pass
+
+
+# --- Inbound (Driving) Ports ---
+
+class GenerateConversationalAudioUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, prompt: str, voice_name: str, word_count: int, conversation_context: str) -> dict:
+        pass
+
+
+class GenerateTestAudioUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, prompt: str, voice_name: str) -> str:
         pass

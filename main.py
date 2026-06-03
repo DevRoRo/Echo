@@ -2,31 +2,48 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from adapters import dependencies
 from adapters.api_router import router as audio_router
+from adapters.gemini_text_adapter import GeminiTextAdapter
+from adapters.gemini_tts_adapter import GeminiTTSAdapter
+from adapters.storage_adapter import LocalFileSystemStorageAdapter
+from core.use_cases import GenerateConversationalAudioUseCase, GenerateTestAudioUseCase
 
 load_dotenv()
 
 app = FastAPI(title="Echo API - Hexagonal")
 
 origins = [
-    "http://localhost:3000",      # Your local Next.js development server
-    "http://127.0.0.1:3000",      # Alternative localhost resolution
-    # You will add your Ngrok or Vercel URLs here later during Phase 5
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,        # Allows specific origins
-    allow_credentials=True,       # Allows cookies/session headers to be sent
-    allow_methods=["*"],          # Allows all HTTP methods (GET, POST, OPTIONS, etc.)
-    allow_headers=["*"],          # Allows all headers
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Include the routes from our API adapter
-app.include_router(audio_router)
+gemini_text = GeminiTextAdapter()
+gemini_tts = GeminiTTSAdapter()
+local_storage = LocalFileSystemStorageAdapter()
 
-# Serve generated audio files so the frontend can play them
+dependencies.conversational_use_case = GenerateConversationalAudioUseCase(
+    text_generator=gemini_text,
+    audio_generator=gemini_tts,
+    storage=local_storage,
+)
+dependencies.test_audio_use_case = GenerateTestAudioUseCase(
+    audio_generator=gemini_tts,
+    storage=local_storage,
+)
+
+app.include_router(audio_router)
 app.mount("/temp_audio", StaticFiles(directory="temp_audio"), name="audio")
+
 
 @app.get("/")
 async def root():
