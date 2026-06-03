@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from adapters.api_router import router as audio_router
 
 load_dotenv()
@@ -23,6 +24,9 @@ app.add_middleware(
 
 # Include the routes from our API adapter
 app.include_router(audio_router)
+
+# Serve generated audio files so the frontend can play them
+app.mount("/temp_audio", StaticFiles(directory="temp_audio"), name="audio")
 
 @app.get("/")
 async def root():

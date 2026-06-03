@@ -1,4 +1,6 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
+
 from pydantic import BaseModel
 
 from core.use_cases import GenerateTestAudioUseCase, GenerateConversationalAudioUseCase
@@ -62,3 +64,17 @@ async def ask_professor_endpoint(request: PromptToAudioRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.options("/ask-professor/")
+@router.options("/generate-audio/")
+async def cors_preflight():
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "600",
+        },
+    )

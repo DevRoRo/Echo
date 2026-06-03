@@ -8,7 +8,7 @@ class GeminiAdapter(AudioGenerationPort, TextGenerationPort):
         self.client = genai.Client()
 
     def generate_text(self, prompt: str, word_count: str) -> str:
-        prompt_string = prompt + "MAX word count: " + str(word_count)
+        prompt_string = prompt + "MAX word count: " + str(word_count) + "TEXT MUST BE IN ENGLISH"
         response = self.client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt_string
