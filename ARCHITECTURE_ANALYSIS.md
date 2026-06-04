@@ -198,3 +198,138 @@ No `__init__.py` files exist in either `core/` or `adapters/`. Python 3.3+ suppo
 9. **Add `__init__.py` files** to both `core/` and `adapters/` packages.
 
 10. **Detect the actual audio format** from Gemini's response metadata instead of hardcoding WAV parameters.
+
+---
+
+## New Feature: Audio Record Persistence (SQLite)
+
+### Overview
+
+Add a **SQLite-backed repository** to persist metadata about generated audio records (file path, transcription, conversation context, voice name). This follows hexagonal architecture: the core defines ports and use cases, the adapter layer implements persistence via SQLAlchemy + SQLite.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Driving Adapters              │
+│  (api_router.py: POST/GET /audio-records/)      │
+├─────────────────────────────────────────────────┤
+│               Inbound Ports (core/ports.py)      │
+│  PersistAudioRecordUseCasePort                  │
+│  ListAudioRecordsUseCasePort                    │
+├─────────────────────────────────────────────────┤
+│               Use Cases (core/use_cases.py)      │
+│  PersistAudioRecordUseCase                      │
+│  ListAudioRecordsUseCase                        │
+├─────────────────────────────────────────────────┤
+│               Outbound Ports (core/ports.py)     │
+│  AudioRecordRepositoryPort                      │
+├─────────────────────────────────────────────────┤
+│               Driven Adapters                    │
+│  SQLiteAudioRecordRepository (SQLAlchemy)       │
+│  Database: echo.db                              │
+└─────────────────────────────────────────────────┘
+```
+
+### Core Layer Additions
+
+**1. Domain Model** (`core/ports.py`):
+
+```python
+@dataclass
+class AudioRecord:
+    id: int | None
+    file_path: str
+    transcription: str
+    conversation_context: str | None
+    voice_name: str
+    created_at: datetime | None
+```
+
+**2. Outbound Port** (`core/ports.py`):
+
+```python
+class AudioRecordRepositoryPort(ABC):
+    @abstractmethod
+    def save(self, record: AudioRecord) -> AudioRecord:
+        pass
+
+    @abstractmethod
+    def find_all(
+        self,
+        transcription: str | None = None,
+        conversation_context: str | None = None,
+        voice_name: str | None = None,
+    ) -> list[AudioRecord]:
+        pass
+```
+
+**3. Inbound Ports** (`core/ports.py`):
+
+```python
+class PersistAudioRecordUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, record: AudioRecord) -> AudioRecord:
+        pass
+
+class ListAudioRecordsUseCasePort(ABC):
+    @abstractmethod
+    def execute(
+        self,
+        transcription: str | None = None,
+        conversation_context: str | None = None,
+        voice_name: str | None = None,
+    ) -> list[AudioRecord]:
+        pass
+```
+
+**4. Use Cases** (`core/use_cases.py`):
+
+- `PersistAudioRecordUseCase(PersistAudioRecordUseCasePort)`: validates input, delegates to `AudioRecordRepositoryPort.save()`
+- `ListAudioRecordsUseCase(ListAudioRecordsUseCasePort)`: delegates to `AudioRecordRepositoryPort.find_all()` with filters
+
+### Adapter Layer Additions
+
+**5. SQLAlchemy Repository** (`adapters/audio_record_repository.py`):
+
+- SQLAlchemy ORM model `AudioRecordModel` mapped to an `audio_records` table
+- `SQLiteAudioRecordRepository` implements `AudioRecordRepositoryPort`
+- Auto-creates `echo.db` SQLite file on first use
+- Columns: `id` (PK), `file_path`, `transcription`, `conversation_context`, `voice_name`, `created_at`
+
+### API Routes (`adapters/api_router.py`)
+
+| Method | Path | Request Body | Query Params | Response |
+|--------|------|-------------|-------------|----------|
+| `POST` | `/audio-records/` | `{ file_path, transcription, conversation_context?, voice_name? }` | — | Created `AudioRecord` |
+| `GET` | `/audio-records/` | — | `transcription`, `conversation_context`, `voice_name` | List of `AudioRecord` |
+
+- `POST /audio-records/` is **persist-only**: it accepts a pre-existing `file_path` and metadata, no audio generation occurs.
+- `GET /audio-records/` supports partial/fuzzy matching on `transcription` and `conversation_context`, exact match on `voice_name`.
+
+### Wiring (`main.py`)
+
+```
+SQLiteAudioRecordRepository → PersistAudioRecordUseCase → dependencies
+                            → ListAudioRecordsUseCase   → dependencies
+```
+
+### Tests (`tests/`)
+
+| Test File | What It Tests |
+|-----------|---------------|
+| `tests/test_use_cases.py` | `PersistAudioRecordUseCase` and `ListAudioRecordsUseCase` with mocked `AudioRecordRepositoryPort` |
+| `tests/test_audio_record_repository.py` | `SQLiteAudioRecordRepository` with in-memory SQLite database |
+
+### Status
+
+| Component | Status |
+|-----------|--------|
+| Domain model (`AudioRecord`) | Implemented |
+| Outbound port (`AudioRecordRepositoryPort`) | Implemented |
+| Inbound ports | Implemented |
+| Use cases | Implemented |
+| SQLite repository adapter | Implemented |
+| API routes (`POST`, `GET /audio-records/`) | Implemented |
+| Wiring / DI | Implemented |
+| Tests | Implemented (17 tests, all passing) |

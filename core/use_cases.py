@@ -1,9 +1,15 @@
+from datetime import datetime, timezone
+
 from core.ports import (
     AudioData,
     AudioGenerationPort,
+    AudioRecord,
+    AudioRecordRepositoryPort,
     AudioStoragePort,
     GenerateConversationalAudioUseCasePort,
     GenerateTestAudioUseCasePort,
+    ListAudioRecordsUseCasePort,
+    PersistAudioRecordUseCasePort,
     TextGenerationPort,
 )
 
@@ -53,3 +59,34 @@ class GenerateTestAudioUseCase(GenerateTestAudioUseCasePort):
         file_path = self.storage.save_base64(audio_data)
 
         return file_path
+
+
+class PersistAudioRecordUseCase(PersistAudioRecordUseCasePort):
+    def __init__(self, repository: AudioRecordRepositoryPort):
+        self.repository = repository
+
+    def execute(self, record: AudioRecord) -> AudioRecord:
+        if not record.file_path.strip():
+            raise ValueError("file_path cannot be empty.")
+        if not record.transcription.strip():
+            raise ValueError("transcription cannot be empty.")
+
+        record.created_at = datetime.now(timezone.utc)
+        return self.repository.save(record)
+
+
+class ListAudioRecordsUseCase(ListAudioRecordsUseCasePort):
+    def __init__(self, repository: AudioRecordRepositoryPort):
+        self.repository = repository
+
+    def execute(
+        self,
+        transcription: str | None = None,
+        conversation_context: str | None = None,
+        voice_name: str | None = None,
+    ) -> list[AudioRecord]:
+        return self.repository.find_all(
+            transcription=transcription,
+            conversation_context=conversation_context,
+            voice_name=voice_name,
+        )

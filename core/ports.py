@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 
 
 # --- Value Objects ---
@@ -8,6 +9,16 @@ from dataclasses import dataclass
 class AudioData:
     base64_string: str
     mime_type: str
+
+
+@dataclass
+class AudioRecord:
+    id: int | None
+    file_path: str
+    transcription: str
+    conversation_context: str | None
+    voice_name: str
+    created_at: datetime | None
 
 
 # --- Outbound (Driven) Ports ---
@@ -30,6 +41,21 @@ class AudioStoragePort(ABC):
         pass
 
 
+class AudioRecordRepositoryPort(ABC):
+    @abstractmethod
+    def save(self, record: AudioRecord) -> AudioRecord:
+        pass
+
+    @abstractmethod
+    def find_all(
+        self,
+        transcription: str | None = None,
+        conversation_context: str | None = None,
+        voice_name: str | None = None,
+    ) -> list[AudioRecord]:
+        pass
+
+
 # --- Inbound (Driving) Ports ---
 
 class GenerateConversationalAudioUseCasePort(ABC):
@@ -41,4 +67,21 @@ class GenerateConversationalAudioUseCasePort(ABC):
 class GenerateTestAudioUseCasePort(ABC):
     @abstractmethod
     def execute(self, prompt: str, voice_name: str) -> str:
+        pass
+
+
+class PersistAudioRecordUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, record: AudioRecord) -> AudioRecord:
+        pass
+
+
+class ListAudioRecordsUseCasePort(ABC):
+    @abstractmethod
+    def execute(
+        self,
+        transcription: str | None = None,
+        conversation_context: str | None = None,
+        voice_name: str | None = None,
+    ) -> list[AudioRecord]:
         pass

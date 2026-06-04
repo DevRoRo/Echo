@@ -1,8 +1,14 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from core.ports import AudioData
-from core.use_cases import GenerateConversationalAudioUseCase, GenerateTestAudioUseCase
+from core.ports import AudioData, AudioRecord
+from core.use_cases import (
+    GenerateConversationalAudioUseCase,
+    GenerateTestAudioUseCase,
+    ListAudioRecordsUseCase,
+    PersistAudioRecordUseCase,
+)
 
 
 class TestGenerateConversationalAudioUseCase(unittest.TestCase):
@@ -106,6 +112,106 @@ class TestGenerateTestAudioUseCase(unittest.TestCase):
 
         self.audio_generator.generate_base64.assert_not_called()
         self.storage.save_base64.assert_not_called()
+
+
+class TestPersistAudioRecordUseCase(unittest.TestCase):
+    def setUp(self):
+        self.repository = MagicMock()
+        self.use_case = PersistAudioRecordUseCase(repository=self.repository)
+
+    def test_execute_saves_record(self):
+        record = AudioRecord(
+            id=None,
+            file_path="/tmp/audio.wav",
+            transcription="Hello",
+            conversation_context="Context",
+            voice_name="voice-A",
+            created_at=None,
+        )
+        expected = AudioRecord(
+            id=1,
+            file_path="/tmp/audio.wav",
+            transcription="Hello",
+            conversation_context="Context",
+            voice_name="voice-A",
+            created_at=datetime.now(timezone.utc),
+        )
+        self.repository.save.return_value = expected
+
+        result = self.use_case.execute(record)
+
+        self.assertEqual(result.id, 1)
+        self.assertEqual(result.file_path, "/tmp/audio.wav")
+        self.repository.save.assert_called_once()
+
+    def test_execute_sets_created_at(self):
+        record = AudioRecord(
+            id=None, file_path="/a.wav", transcription="Hi",
+            conversation_context=None, voice_name="v", created_at=None,
+        )
+        self.repository.save.return_value = record
+
+        self.use_case.execute(record)
+
+        self.assertIsNotNone(record.created_at)
+
+    def test_execute_empty_file_path_raises_error(self):
+        record = AudioRecord(
+            id=None, file_path="", transcription="Hi",
+            conversation_context=None, voice_name="v", created_at=None,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(record)
+        self.assertIn("file_path", str(ctx.exception).lower())
+        self.repository.save.assert_not_called()
+
+    def test_execute_empty_transcription_raises_error(self):
+        record = AudioRecord(
+            id=None, file_path="/a.wav", transcription="",
+            conversation_context=None, voice_name="v", created_at=None,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(record)
+        self.assertIn("transcription", str(ctx.exception).lower())
+        self.repository.save.assert_not_called()
+
+
+class TestListAudioRecordsUseCase(unittest.TestCase):
+    def setUp(self):
+        self.repository = MagicMock()
+        self.use_case = ListAudioRecordsUseCase(repository=self.repository)
+
+    def test_execute_returns_all_records(self):
+        expected = [
+            AudioRecord(id=1, file_path="/a.wav", transcription="A",
+                        conversation_context=None, voice_name="v",
+                        created_at=datetime.now(timezone.utc)),
+        ]
+        self.repository.find_all.return_value = expected
+
+        result = self.use_case.execute()
+
+        self.assertEqual(result, expected)
+        self.repository.find_all.assert_called_once_with(
+            transcription=None,
+            conversation_context=None,
+            voice_name=None,
+        )
+
+    def test_execute_passes_filters(self):
+        self.repository.find_all.return_value = []
+
+        self.use_case.execute(
+            transcription="hello",
+            conversation_context="math",
+            voice_name="voice-A",
+        )
+
+        self.repository.find_all.assert_called_once_with(
+            transcription="hello",
+            conversation_context="math",
+            voice_name="voice-A",
+        )
 
 
 if __name__ == "__main__":

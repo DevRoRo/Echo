@@ -27,7 +27,7 @@ class GCSStorageAdapter(AudioStoragePort):
         self.bucket = self.client.bucket(self.bucket_name)
 
     def save_base64(self, audio_data: AudioData) -> str:
-        ext = MIME_TO_EXT.get(audio_data.mime_type, ".bin")
+        ext = MIME_TO_EXT.get(audio_data.mime_type, ".wav")
         unique_filename = f"ai_prompts/{uuid.uuid4()}{ext}"
 
         audio_bytes = base64.b64decode(audio_data.base64_string)

@@ -1,6 +1,7 @@
 import base64
 import os
 import uuid
+import wave
 from core.ports import AudioData, AudioStoragePort
 
 MIME_TO_EXT = {
@@ -19,12 +20,15 @@ class LocalFileSystemStorageAdapter(AudioStoragePort):
         os.makedirs(self.output_dir, exist_ok=True)
 
     def save_base64(self, audio_data: AudioData) -> str:
-        ext = MIME_TO_EXT.get(audio_data.mime_type, ".bin")
-        filename = f"{uuid.uuid4()}{ext}"
+        filename = f"{uuid.uuid4()}.wav"
         filepath = os.path.join(self.output_dir, filename)
 
         audio_bytes = base64.b64decode(audio_data.base64_string)
-        with open(filepath, "wb") as f:
-            f.write(audio_bytes)
+        with wave.open(filepath, "wb") as f:
+            f.setnchannels(1)
+            f.setsampwidth(2)
+            f.setframerate(24000)
+
+            f.writeframes(audio_bytes)
 
         return filepath
