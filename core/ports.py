@@ -14,6 +14,7 @@ class AudioData:
 @dataclass
 class AudioRecord:
     id: int | None
+    name: str
     file_path: str
     transcription: str
     conversation_context: str | None
@@ -47,8 +48,17 @@ class AudioRecordRepositoryPort(ABC):
         pass
 
     @abstractmethod
+    def find_by_id(self, record_id: int) -> AudioRecord | None:
+        pass
+
+    @abstractmethod
+    def delete_by_id(self, record_id: int) -> AudioRecord | None:
+        pass
+
+    @abstractmethod
     def find_all(
         self,
+        name: str | None = None,
         transcription: str | None = None,
         conversation_context: str | None = None,
         voice_name: str | None = None,
@@ -80,8 +90,113 @@ class ListAudioRecordsUseCasePort(ABC):
     @abstractmethod
     def execute(
         self,
+        name: str | None = None,
         transcription: str | None = None,
         conversation_context: str | None = None,
         voice_name: str | None = None,
     ) -> list[AudioRecord]:
+        pass
+
+
+class DeleteAudioRecordUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, record_id: int) -> AudioRecord:
+        pass
+
+
+# --- LTI Value Objects ---
+
+@dataclass
+class PlatformRegistration:
+    id: int | None
+    issuer: str
+    client_id: str
+    auth_login_url: str
+    auth_token_url: str
+    auth_keyset_url: str
+    deployment_ids: list[str]
+    created_at: datetime | None
+    updated_at: datetime | None
+
+
+@dataclass
+class LtiSession:
+    id: int | None
+    nonce: str
+    target_link_uri: str
+    created_at: datetime | None
+    expires_at: datetime | None
+
+
+# --- LTI Outbound (Driven) Ports ---
+
+class PlatformRepositoryPort(ABC):
+    @abstractmethod
+    def save(self, platform: PlatformRegistration) -> PlatformRegistration:
+        pass
+
+    @abstractmethod
+    def find_by_issuer(self, issuer: str) -> PlatformRegistration | None:
+        pass
+
+    @abstractmethod
+    def find_by_id(self, platform_id: int) -> PlatformRegistration | None:
+        pass
+
+    @abstractmethod
+    def find_all(self) -> list[PlatformRegistration]:
+        pass
+
+    @abstractmethod
+    def delete_by_id(self, platform_id: int) -> PlatformRegistration | None:
+        pass
+
+
+class LtiSessionRepositoryPort(ABC):
+    @abstractmethod
+    def save(self, session: LtiSession) -> LtiSession:
+        pass
+
+    @abstractmethod
+    def find_by_nonce(self, nonce: str) -> LtiSession | None:
+        pass
+
+    @abstractmethod
+    def delete_by_id(self, session_id: int) -> None:
+        pass
+
+    @abstractmethod
+    def clean_expired(self) -> int:
+        pass
+
+
+# --- LTI Inbound (Driving) Ports ---
+
+class RegisterPlatformUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, platform: PlatformRegistration) -> PlatformRegistration:
+        pass
+
+
+class ListPlatformsUseCasePort(ABC):
+    @abstractmethod
+    def execute(self) -> list[PlatformRegistration]:
+        pass
+
+
+class DeletePlatformUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, platform_id: int) -> PlatformRegistration:
+        pass
+
+
+class InitiateLoginUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, issuer: str, target_link_uri: str, login_hint: str, lti_message_hint: str = "") -> dict:
+        pass
+
+
+class ValidateLaunchUseCasePort(ABC):
+    @abstractmethod
+    def execute(self, id_token: str, state: str) -> dict:
         pass

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 from core.ports import AudioData, AudioRecord
 from core.use_cases import (
+    DeleteAudioRecordUseCase,
     GenerateConversationalAudioUseCase,
     GenerateTestAudioUseCase,
     ListAudioRecordsUseCase,
@@ -122,6 +123,7 @@ class TestPersistAudioRecordUseCase(unittest.TestCase):
     def test_execute_saves_record(self):
         record = AudioRecord(
             id=None,
+            name="test-recording",
             file_path="/tmp/audio.wav",
             transcription="Hello",
             conversation_context="Context",
@@ -130,6 +132,7 @@ class TestPersistAudioRecordUseCase(unittest.TestCase):
         )
         expected = AudioRecord(
             id=1,
+            name="test-recording",
             file_path="/tmp/audio.wav",
             transcription="Hello",
             conversation_context="Context",
@@ -141,12 +144,13 @@ class TestPersistAudioRecordUseCase(unittest.TestCase):
         result = self.use_case.execute(record)
 
         self.assertEqual(result.id, 1)
+        self.assertEqual(result.name, "test-recording")
         self.assertEqual(result.file_path, "/tmp/audio.wav")
         self.repository.save.assert_called_once()
 
     def test_execute_sets_created_at(self):
         record = AudioRecord(
-            id=None, file_path="/a.wav", transcription="Hi",
+            id=None, name="n", file_path="/a.wav", transcription="Hi",
             conversation_context=None, voice_name="v", created_at=None,
         )
         self.repository.save.return_value = record
@@ -155,9 +159,19 @@ class TestPersistAudioRecordUseCase(unittest.TestCase):
 
         self.assertIsNotNone(record.created_at)
 
+    def test_execute_empty_name_raises_error(self):
+        record = AudioRecord(
+            id=None, name="", file_path="/a.wav", transcription="Hi",
+            conversation_context=None, voice_name="v", created_at=None,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(record)
+        self.assertIn("name", str(ctx.exception).lower())
+        self.repository.save.assert_not_called()
+
     def test_execute_empty_file_path_raises_error(self):
         record = AudioRecord(
-            id=None, file_path="", transcription="Hi",
+            id=None, name="n", file_path="", transcription="Hi",
             conversation_context=None, voice_name="v", created_at=None,
         )
         with self.assertRaises(ValueError) as ctx:
@@ -167,7 +181,7 @@ class TestPersistAudioRecordUseCase(unittest.TestCase):
 
     def test_execute_empty_transcription_raises_error(self):
         record = AudioRecord(
-            id=None, file_path="/a.wav", transcription="",
+            id=None, name="n", file_path="/a.wav", transcription="",
             conversation_context=None, voice_name="v", created_at=None,
         )
         with self.assertRaises(ValueError) as ctx:
@@ -183,7 +197,7 @@ class TestListAudioRecordsUseCase(unittest.TestCase):
 
     def test_execute_returns_all_records(self):
         expected = [
-            AudioRecord(id=1, file_path="/a.wav", transcription="A",
+            AudioRecord(id=1, name="n", file_path="/a.wav", transcription="A",
                         conversation_context=None, voice_name="v",
                         created_at=datetime.now(timezone.utc)),
         ]
@@ -193,6 +207,7 @@ class TestListAudioRecordsUseCase(unittest.TestCase):
 
         self.assertEqual(result, expected)
         self.repository.find_all.assert_called_once_with(
+            name=None,
             transcription=None,
             conversation_context=None,
             voice_name=None,
@@ -202,16 +217,47 @@ class TestListAudioRecordsUseCase(unittest.TestCase):
         self.repository.find_all.return_value = []
 
         self.use_case.execute(
+            name="lecture-1",
             transcription="hello",
             conversation_context="math",
             voice_name="voice-A",
         )
 
         self.repository.find_all.assert_called_once_with(
+            name="lecture-1",
             transcription="hello",
             conversation_context="math",
             voice_name="voice-A",
         )
+
+
+class TestDeleteAudioRecordUseCase(unittest.TestCase):
+    def setUp(self):
+        self.repository = MagicMock()
+        self.use_case = DeleteAudioRecordUseCase(repository=self.repository)
+
+    def test_execute_deletes_record(self):
+        record = AudioRecord(
+            id=1, name="n", file_path="/a.wav", transcription="Hi",
+            conversation_context=None, voice_name="v",
+            created_at=datetime.now(timezone.utc),
+        )
+        self.repository.find_by_id.return_value = record
+        self.repository.delete_by_id.return_value = record
+
+        result = self.use_case.execute(1)
+
+        self.assertEqual(result.id, 1)
+        self.repository.find_by_id.assert_called_once_with(1)
+        self.repository.delete_by_id.assert_called_once_with(1)
+
+    def test_execute_raises_error_when_not_found(self):
+        self.repository.find_by_id.return_value = None
+
+        with self.assertRaises(ValueError) as ctx:
+            self.use_case.execute(999)
+        self.assertIn("not found", str(ctx.exception).lower())
+        self.repository.delete_by_id.assert_not_called()
 
 
 if __name__ == "__main__":

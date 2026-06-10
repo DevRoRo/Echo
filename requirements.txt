@@ -30,6 +30,8 @@ mdurl==0.1.2
 psycopg==3.3.4
 psycopg-binary==3.3.4
 pyasn1==0.6.3
+PyJWT==2.13.0
+pylti1p3==2.0.0
 pyasn1_modules==0.4.2
 pycparser==3.0
 pydantic==2.13.4

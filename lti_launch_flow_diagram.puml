@@ -1,0 +1,56 @@
+@startuml Fluxo de Lançamento LTI
+' Fluxo de Lançamento LTI 1.3 — Echo (Ferramenta) + Moodle (Plataforma)
+
+actor "Usuário\n(Navegador)" as User
+participant "Moodle\n(Plataforma)" as Moodle
+participant "Backend Echo\n(FastAPI)" as Echo
+database "Banco Echo\n(SQLite)" as DB
+participant "Frontend Echo\n(React)" as Frontend
+
+== Etapa 1: Iniciação do Login OIDC ==
+
+User -> Moodle: Clica no link da ferramenta Echo na disciplina
+Moodle -> Echo: POST /lti/login/\niss, target_link_uri, login_hint, lti_message_hint
+activate Echo
+Echo -> DB: Buscar PlatformRegistration pelo issuer
+DB --> Echo: PlatformRegistration
+Echo -> DB: Gerar nonce, salvar LtiSession
+note right: nonce = uuid4().hex\nexpira em 5 minutos
+Echo --> Moodle: 302 Redirecionar para endpoint OIDC do Moodle\n(com state=nonce, nonce, client_id, redirect_uri)
+deactivate Echo
+
+== Etapa 2: Autenticação no Moodle ==
+
+Moodle -> User: Redirecionar para página de login do Moodle
+User -> Moodle: Autentica (sem interrupção se sessão ativa)
+note right: O usuário geralmente\njá está logado no Moodle
+
+== Etapa 3: Lançamento LTI ==
+
+Moodle -> Echo: POST /lti/launch/\nid_token=<JWT LTI>, state=<nonce>
+activate Echo
+Echo -> DB: Buscar LtiSession pelo nonce
+DB --> Echo: LtiSession (com target_link_uri)
+note right: Validar que o nonce\nnão expirou
+Echo -> DB: Buscar PlatformRegistration pelo iss\n(do id_token via DbToolConf)
+DB --> Echo: PlatformRegistration
+Echo -> Echo: pylti1p3.MessageLaunch.validate()
+note right: Verifica assinatura do JWT\ncontra JWKS do Moodle\nValida aud, iss, exp, nonce
+Echo -> Echo: Emitir JWT de sessão stateless
+note right: Assinado com chave RSA do Echo\nContém sub, name, email,\nroles, course_id, course_title
+Echo -> DB: Excluir LtiSession utilizado
+Echo --> Frontend: Redirecionar com session_token=<JWT>
+deactivate Echo
+
+== Etapa 4: Requisições à API ==
+
+Frontend -> Frontend: Armazenar session_token
+Frontend -> Echo: GET /api/endpoint\nAuthorization: Bearer <JWT>
+activate Echo
+Echo -> Echo: LTIAuthMiddleware valida JWT\n(injeta request.state.lti_user)
+Echo --> Frontend: Resposta
+deactivate Echo
+
+note over Echo: Todas as requisições seguintes\nvalidadas via JWT stateless\nSem consulta ao banco
+
+@enduml

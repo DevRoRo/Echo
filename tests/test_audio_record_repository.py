@@ -20,6 +20,7 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
     def test_save_and_find_all(self):
         record = AudioRecord(
             id=None,
+            name="test-recording",
             file_path="/tmp/audio.wav",
             transcription="Hello world",
             conversation_context="Greeting context",
@@ -28,6 +29,7 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
         )
         saved = self.repo.save(record)
         self.assertIsNotNone(saved.id)
+        self.assertEqual(saved.name, "test-recording")
         self.assertEqual(saved.file_path, "/tmp/audio.wav")
         self.assertEqual(saved.transcription, "Hello world")
         self.assertEqual(saved.conversation_context, "Greeting context")
@@ -37,13 +39,27 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].id, saved.id)
 
-    def test_find_all_filters_by_transcription(self):
+    def test_find_all_filters_by_name(self):
         self.repo.save(AudioRecord(
-            id=None, file_path="/a.wav", transcription="Hello world",
+            id=None, name="lecture-1", file_path="/a.wav", transcription="Hi",
             conversation_context=None, voice_name="v1", created_at=datetime.now(timezone.utc),
         ))
         self.repo.save(AudioRecord(
-            id=None, file_path="/b.wav", transcription="Goodbye world",
+            id=None, name="lab-1", file_path="/b.wav", transcription="Hi",
+            conversation_context=None, voice_name="v2", created_at=datetime.now(timezone.utc),
+        ))
+
+        results = self.repo.find_all(name="lecture")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].file_path, "/a.wav")
+
+    def test_find_all_filters_by_transcription(self):
+        self.repo.save(AudioRecord(
+            id=None, name="n1", file_path="/a.wav", transcription="Hello world",
+            conversation_context=None, voice_name="v1", created_at=datetime.now(timezone.utc),
+        ))
+        self.repo.save(AudioRecord(
+            id=None, name="n2", file_path="/b.wav", transcription="Goodbye world",
             conversation_context=None, voice_name="v2", created_at=datetime.now(timezone.utc),
         ))
 
@@ -53,12 +69,12 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
 
     def test_find_all_filters_by_conversation_context(self):
         self.repo.save(AudioRecord(
-            id=None, file_path="/a.wav", transcription="Hi",
+            id=None, name="n1", file_path="/a.wav", transcription="Hi",
             conversation_context="Math class", voice_name="v1",
             created_at=datetime.now(timezone.utc),
         ))
         self.repo.save(AudioRecord(
-            id=None, file_path="/b.wav", transcription="Hi",
+            id=None, name="n2", file_path="/b.wav", transcription="Hi",
             conversation_context="History class", voice_name="v2",
             created_at=datetime.now(timezone.utc),
         ))
@@ -69,12 +85,12 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
 
     def test_find_all_filters_by_voice_name(self):
         self.repo.save(AudioRecord(
-            id=None, file_path="/a.wav", transcription="Hi",
+            id=None, name="n1", file_path="/a.wav", transcription="Hi",
             conversation_context=None, voice_name="voice-A",
             created_at=datetime.now(timezone.utc),
         ))
         self.repo.save(AudioRecord(
-            id=None, file_path="/b.wav", transcription="Hi",
+            id=None, name="n2", file_path="/b.wav", transcription="Hi",
             conversation_context=None, voice_name="voice-B",
             created_at=datetime.now(timezone.utc),
         ))
@@ -84,19 +100,19 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
         self.assertEqual(results[0].file_path, "/a.wav")
 
     def test_find_all_returns_empty_when_no_match(self):
-        results = self.repo.find_all(transcription="nonexistent")
+        results = self.repo.find_all(name="nonexistent")
         self.assertEqual(results, [])
 
     def test_find_all_orders_by_created_at_desc(self):
         from datetime import timedelta
         now = datetime.now(timezone.utc)
         older = self.repo.save(AudioRecord(
-            id=None, file_path="/old.wav", transcription="Old",
+            id=None, name="n1", file_path="/old.wav", transcription="Old",
             conversation_context=None, voice_name="v",
             created_at=now - timedelta(hours=1),
         ))
         newer = self.repo.save(AudioRecord(
-            id=None, file_path="/new.wav", transcription="New",
+            id=None, name="n2", file_path="/new.wav", transcription="New",
             conversation_context=None, voice_name="v",
             created_at=now,
         ))
@@ -105,14 +121,44 @@ class TestSQLiteAudioRecordRepository(unittest.TestCase):
         self.assertEqual(results[0].id, newer.id)
         self.assertEqual(results[1].id, older.id)
 
+    def test_find_by_id_returns_record(self):
+        saved = self.repo.save(AudioRecord(
+            id=None, name="n1", file_path="/a.wav", transcription="Hi",
+            conversation_context=None, voice_name="v",
+            created_at=datetime.now(timezone.utc),
+        ))
+        found = self.repo.find_by_id(saved.id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, saved.id)
+        self.assertEqual(found.name, "n1")
+
+    def test_find_by_id_returns_none_when_not_found(self):
+        found = self.repo.find_by_id(999)
+        self.assertIsNone(found)
+
+    def test_delete_by_id_removes_record(self):
+        saved = self.repo.save(AudioRecord(
+            id=None, name="n1", file_path="/a.wav", transcription="Hi",
+            conversation_context=None, voice_name="v",
+            created_at=datetime.now(timezone.utc),
+        ))
+        deleted = self.repo.delete_by_id(saved.id)
+        self.assertIsNotNone(deleted)
+        self.assertEqual(deleted.id, saved.id)
+        self.assertEqual(len(self.repo.find_all()), 0)
+
+    def test_delete_by_id_returns_none_when_not_found(self):
+        deleted = self.repo.delete_by_id(999)
+        self.assertIsNone(deleted)
+
     def test_save_persists_multiple_records(self):
         self.repo.save(AudioRecord(
-            id=None, file_path="/a.wav", transcription="A",
+            id=None, name="n1", file_path="/a.wav", transcription="A",
             conversation_context=None, voice_name="v",
             created_at=datetime.now(timezone.utc),
         ))
         self.repo.save(AudioRecord(
-            id=None, file_path="/b.wav", transcription="B",
+            id=None, name="n2", file_path="/b.wav", transcription="B",
             conversation_context=None, voice_name="v",
             created_at=datetime.now(timezone.utc),
         ))

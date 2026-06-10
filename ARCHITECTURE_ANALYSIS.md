@@ -239,6 +239,7 @@ Add a **SQLite-backed repository** to persist metadata about generated audio rec
 @dataclass
 class AudioRecord:
     id: int | None
+    name: str
     file_path: str
     transcription: str
     conversation_context: str | None
@@ -257,6 +258,7 @@ class AudioRecordRepositoryPort(ABC):
     @abstractmethod
     def find_all(
         self,
+        name: str | None = None,
         transcription: str | None = None,
         conversation_context: str | None = None,
         voice_name: str | None = None,
@@ -276,6 +278,7 @@ class ListAudioRecordsUseCasePort(ABC):
     @abstractmethod
     def execute(
         self,
+        name: str | None = None,
         transcription: str | None = None,
         conversation_context: str | None = None,
         voice_name: str | None = None,
@@ -295,31 +298,34 @@ class ListAudioRecordsUseCasePort(ABC):
 - SQLAlchemy ORM model `AudioRecordModel` mapped to an `audio_records` table
 - `SQLiteAudioRecordRepository` implements `AudioRecordRepositoryPort`
 - Auto-creates `echo.db` SQLite file on first use
-- Columns: `id` (PK), `file_path`, `transcription`, `conversation_context`, `voice_name`, `created_at`
+- Columns: `id` (PK), `name`, `file_path`, `transcription`, `conversation_context`, `voice_name`, `created_at`
 
 ### API Routes (`adapters/api_router.py`)
 
 | Method | Path | Request Body | Query Params | Response |
 |--------|------|-------------|-------------|----------|
-| `POST` | `/audio-records/` | `{ file_path, transcription, conversation_context?, voice_name? }` | — | Created `AudioRecord` |
-| `GET` | `/audio-records/` | — | `transcription`, `conversation_context`, `voice_name` | List of `AudioRecord` |
+| `POST` | `/audio-records/` | `{ name, file_path, transcription, conversation_context?, voice_name? }` | — | Created `AudioRecord` |
+| `GET` | `/audio-records/` | — | `name`, `transcription`, `conversation_context`, `voice_name` | List of `AudioRecord` |
+| `DELETE` | `/audio-records/{record_id}` | — | — | Deleted `AudioRecord` |
 
-- `POST /audio-records/` is **persist-only**: it accepts a pre-existing `file_path` and metadata, no audio generation occurs.
-- `GET /audio-records/` supports partial/fuzzy matching on `transcription` and `conversation_context`, exact match on `voice_name`.
+- `POST /audio-records/` is **persist-only**: it accepts a pre-existing `file_path` and metadata, no audio generation occurs. `name` is a required human-readable label for the audio.
+- `GET /audio-records/` supports partial/fuzzy matching on `name`, `transcription`, and `conversation_context`, exact match on `voice_name`.
+- `DELETE /audio-records/{record_id}` removes the DB record and deletes the file from disk. Returns `404` if not found. File deletion is best-effort (DB delete proceeds even if file is missing).
 
 ### Wiring (`main.py`)
 
 ```
 SQLiteAudioRecordRepository → PersistAudioRecordUseCase → dependencies
                             → ListAudioRecordsUseCase   → dependencies
+                            → DeleteAudioRecordUseCase  → dependencies
 ```
 
 ### Tests (`tests/`)
 
 | Test File | What It Tests |
 |-----------|---------------|
-| `tests/test_use_cases.py` | `PersistAudioRecordUseCase` and `ListAudioRecordsUseCase` with mocked `AudioRecordRepositoryPort` |
-| `tests/test_audio_record_repository.py` | `SQLiteAudioRecordRepository` with in-memory SQLite database |
+| `tests/test_use_cases.py` | `PersistAudioRecordUseCase`, `ListAudioRecordsUseCase`, and `DeleteAudioRecordUseCase` with mocked `AudioRecordRepositoryPort` |
+| `tests/test_audio_record_repository.py` | `SQLiteAudioRecordRepository` with in-memory SQLite database — save, find_all, find_by_id, delete_by_id, filters, ordering |
 
 ### Status
 
@@ -330,6 +336,6 @@ SQLiteAudioRecordRepository → PersistAudioRecordUseCase → dependencies
 | Inbound ports | Implemented |
 | Use cases | Implemented |
 | SQLite repository adapter | Implemented |
-| API routes (`POST`, `GET /audio-records/`) | Implemented |
+| API routes (`POST`, `GET`, `DELETE /audio-records/`) | Implemented |
 | Wiring / DI | Implemented |
-| Tests | Implemented (17 tests, all passing) |
+| Tests | Implemented (23 tests, all passing) |

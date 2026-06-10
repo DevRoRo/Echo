@@ -1,3 +1,5 @@
+import os
+
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,6 +8,7 @@ from pydantic import BaseModel
 
 from core.ports import AudioRecord
 from core.use_cases import (
+    DeleteAudioRecordUseCase,
     GenerateConversationalAudioUseCase,
     GenerateTestAudioUseCase,
     ListAudioRecordsUseCase,
@@ -13,6 +16,7 @@ from core.use_cases import (
 )
 from adapters.dependencies import (
     get_conversational_use_case,
+    get_delete_audio_record_use_case,
     get_list_audio_records_use_case,
     get_persist_audio_record_use_case,
     get_test_audio_use_case,
@@ -35,6 +39,7 @@ class PromptToAudioRequest(BaseModel):
 
 
 class CreateAudioRecordRequest(BaseModel):
+    name: str
     file_path: str
     transcription: str
     conversation_context: str | None = None
@@ -43,6 +48,7 @@ class CreateAudioRecordRequest(BaseModel):
 
 class AudioRecordResponse(BaseModel):
     id: int
+    name: str
     file_path: str
     transcription: str
     conversation_context: str | None
@@ -96,6 +102,7 @@ async def create_audio_record(
         print(request)
         record = AudioRecord(
             id=None,
+            name=request.name,
             file_path=request.file_path,
             transcription=request.transcription,
             conversation_context=request.conversation_context,
@@ -105,6 +112,7 @@ async def create_audio_record(
         saved = use_case.execute(record)
         return AudioRecordResponse(
             id=saved.id,
+            name=saved.name,
             file_path=saved.file_path,
             transcription=saved.transcription,
             conversation_context=saved.conversation_context,
@@ -119,6 +127,7 @@ async def create_audio_record(
 
 @router.get("/audio-records/")
 async def list_audio_records(
+    name: str | None = Query(None, description="Partial match on name"),
     transcription: str | None = Query(None, description="Partial match on transcription"),
     conversation_context: str | None = Query(None, description="Partial match on conversation context"),
     voice_name: str | None = Query(None, description="Exact match on voice name"),
@@ -126,6 +135,7 @@ async def list_audio_records(
 ):
     try:
         records = use_case.execute(
+            name=name,
             transcription=transcription,
             conversation_context=conversation_context,
             voice_name=voice_name,
@@ -133,6 +143,7 @@ async def list_audio_records(
         return [
             AudioRecordResponse(
                 id=r.id,
+                name=r.name,
                 file_path=r.file_path,
                 transcription=r.transcription,
                 conversation_context=r.conversation_context,
@@ -141,6 +152,34 @@ async def list_audio_records(
             )
             for r in records
         ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/audio-records/{record_id}")
+async def delete_audio_record(
+    record_id: int,
+    use_case: DeleteAudioRecordUseCase = Depends(get_delete_audio_record_use_case),
+):
+    try:
+        record = use_case.execute(record_id)
+
+        try:
+            os.remove(record.file_path)
+        except OSError:
+            pass
+
+        return AudioRecordResponse(
+            id=record.id,
+            name=record.name,
+            file_path=record.file_path,
+            transcription=record.transcription,
+            conversation_context=record.conversation_context,
+            voice_name=record.voice_name,
+            created_at=record.created_at,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

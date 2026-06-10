@@ -6,6 +6,7 @@ from core.ports import (
     AudioRecord,
     AudioRecordRepositoryPort,
     AudioStoragePort,
+    DeleteAudioRecordUseCasePort,
     GenerateConversationalAudioUseCasePort,
     GenerateTestAudioUseCasePort,
     ListAudioRecordsUseCasePort,
@@ -66,6 +67,8 @@ class PersistAudioRecordUseCase(PersistAudioRecordUseCasePort):
         self.repository = repository
 
     def execute(self, record: AudioRecord) -> AudioRecord:
+        if not record.name.strip():
+            raise ValueError("name cannot be empty.")
         if not record.file_path.strip():
             raise ValueError("file_path cannot be empty.")
         if not record.transcription.strip():
@@ -75,17 +78,31 @@ class PersistAudioRecordUseCase(PersistAudioRecordUseCasePort):
         return self.repository.save(record)
 
 
+class DeleteAudioRecordUseCase(DeleteAudioRecordUseCasePort):
+    def __init__(self, repository: AudioRecordRepositoryPort):
+        self.repository = repository
+
+    def execute(self, record_id: int) -> AudioRecord:
+        record = self.repository.find_by_id(record_id)
+        if record is None:
+            raise ValueError(f"AudioRecord with id {record_id} not found.")
+
+        return self.repository.delete_by_id(record_id)
+
+
 class ListAudioRecordsUseCase(ListAudioRecordsUseCasePort):
     def __init__(self, repository: AudioRecordRepositoryPort):
         self.repository = repository
 
     def execute(
         self,
+        name: str | None = None,
         transcription: str | None = None,
         conversation_context: str | None = None,
         voice_name: str | None = None,
     ) -> list[AudioRecord]:
         return self.repository.find_all(
+            name=name,
             transcription=transcription,
             conversation_context=conversation_context,
             voice_name=voice_name,
