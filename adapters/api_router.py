@@ -99,7 +99,6 @@ async def create_audio_record(
     use_case: PersistAudioRecordUseCase = Depends(get_persist_audio_record_use_case),
 ):
     try:
-        print(request)
         record = AudioRecord(
             id=None,
             name=request.name,
